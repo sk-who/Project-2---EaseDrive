@@ -1,13 +1,16 @@
 import { comparePassword, generateToken } from '../../../lib/auth';
 
 const dummyUser = {
-  email: 'test@example.com',
-  password: '$2a$10$abcd...', // Hashed version of 'password'
   id: 'user123',
+  email: 'test@example.com',
+  // Paste the hashed password you just generated here
+  password: '$2b$10$MUtXMKXdUmqUz5NI3uavxeVoIVCNLwu3N1XydeUykweMJAqWbO0zq'
 };
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
 
   const { email, password } = req.body;
 
@@ -16,5 +19,5 @@ export default async function handler(req, res) {
   }
 
   const token = generateToken(dummyUser.id);
-  res.status(200).json({ token });
+  return res.status(200).json({ token });
 }
