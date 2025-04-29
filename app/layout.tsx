@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Poppins } from 'next/font/google'
+import { Poppins } from "next/font/google";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
-
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 const poppins = Poppins({
-    subsets: ['latin'],
-    weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
-    variable: '--font-poppins',
-})
+  subsets: ["latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-poppins",
+});
 
 export const metadata: Metadata = {
   title: "StoreIt",
@@ -20,13 +20,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-    const GA_MEASUREMENT_ID = "G-V8V9YKEBS0";
+  const GA_MEASUREMENT_ID = "G-V8V9YKEBS0";
 
   return (
     <html lang="en">
       <body className={`${poppins.variable} font-poppins antialiased`}>
         <GoogleAnalytics measurementId={GA_MEASUREMENT_ID} />
-
+        <Analytics />
         {children}
       </body>
     </html>

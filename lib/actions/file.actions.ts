@@ -7,10 +7,60 @@ import { ID, Models, Query } from "node-appwrite";
 import { constructFileUrl, getFileType, parseStringify } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/actions/user.actions";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const handleError = (error: unknown, message: string) => {
   console.log(error, message);
   throw error;
+};
+
+// Generate image captions using Google Gemini
+export const generateImageCaption = async (imageUrl: string) => {
+  try {
+    // Initialize the Google Generative AI with your API key
+    // In production, use environment variables for the API key
+    const genAI = new GoogleGenerativeAI(
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY || ""
+    );
+
+    // Use gemini-1.5-flash model instead of the deprecated gemini-pro-vision
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro-exp-03-25",
+    });
+
+    // Fetch the image data
+    const imageResponse = await fetch(imageUrl);
+    const imageBlob = await imageResponse.blob();
+
+    // Convert the blob to base64 using Node.js Buffer
+    // (FileReader is browser-only and doesn't exist in Node.js)
+    const arrayBuffer = await imageBlob.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64Data = buffer.toString("base64");
+
+    // Create image part for the Gemini API
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: imageBlob.type,
+      },
+    };
+
+    // Generate the caption
+    const result = await model.generateContent([
+      imagePart,
+      "Generate a brief caption for this image in 10 words or less. Be descriptive but concise.",
+    ]);
+
+    const response = result.response;
+    const caption = response.text().trim();
+
+    return caption;
+  } catch (error) {
+    console.error("Error generating image caption:", error);
+    // Return a default caption if there's an error
+    return "Image";
+  }
 };
 
 export const uploadFile = async ({
@@ -30,17 +80,32 @@ export const uploadFile = async ({
       inputFile
     );
 
+    const fileType = getFileType(bucketFile.name);
+    const fileUrl = constructFileUrl(bucketFile.$id);
+
+    // Generate caption for images
+    let caption = "";
+    if (fileType.type === "image" && fileType.extension !== "svg") {
+      try {
+        caption = await generateImageCaption(fileUrl);
+      } catch (error) {
+        console.error("Failed to generate caption:", error);
+        caption = "Image"; // Default caption
+      }
+    }
+
     const fileDocument = {
-      type: getFileType(bucketFile.name).type,
+      type: fileType.type,
       name: bucketFile.name,
-      url: constructFileUrl(bucketFile.$id),
-      extension: getFileType(bucketFile.name).extension,
+      url: fileUrl,
+      extension: fileType.extension,
       size: bucketFile.sizeOriginal,
       owner: ownerId,
       accountId,
       users: [],
       bucketFileId: bucketFile.$id,
       tagIds: [],
+      caption: caption, // Add caption field
     };
 
     const newFile = await databases
@@ -253,3 +318,31 @@ export async function getTotalSpaceUsed() {
     handleError(error, "Error calculating total space used:, ");
   }
 }
+
+export const updateFileCaption = async ({
+  fileId,
+  caption,
+  path,
+}: {
+  fileId: string;
+  caption: string;
+  path: string;
+}) => {
+  const { databases } = await createAdminClient();
+
+  try {
+    const updatedFile = await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.filesCollectionId,
+      fileId,
+      {
+        caption: caption,
+      }
+    );
+
+    revalidatePath(path);
+    return parseStringify(updatedFile);
+  } catch (error) {
+    handleError(error, "Failed to update file caption");
+  }
+};
